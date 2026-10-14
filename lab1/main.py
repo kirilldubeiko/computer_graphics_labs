@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import colorchooser
-from conversions import (
+from convertions import (
     rgb_to_cmyk, cmyk_to_rgb,
     rgb_to_hsv, hsv_to_rgb,
 )
@@ -13,7 +13,7 @@ class ColorApp(tk.Tk):
         self.geometry("760x580")
         self.resizable(False, False)
 
-        self.r, self.g, self.b = 142, 100, 200
+        self.r, self.g, self.b = 142.0, 100.0, 200.0
         self.cmyk = list(rgb_to_cmyk(self.r, self.g, self.b))
         self.hsv = list(rgb_to_hsv(self.r, self.g, self.b))
         self.updating = False
@@ -62,10 +62,9 @@ class ColorApp(tk.Tk):
 
             scale = tk.Scale(row, from_=lo, to=hi,
                              orient="horizontal", resolution=1,
-                             showvalue=False)
+                             showvalue=False,
+                             command=lambda v, key=k: self.on_slider(key))
             scale.pack(side="left", fill="x", expand=True, padx=4)
-            scale.bind("<B1-Motion>", lambda e, key=k: self.on_slider(key))
-            scale.bind("<ButtonRelease-1>", lambda e, key=k: self.on_slider(key))
 
             entry = tk.Entry(row, textvariable=var, width=7, justify="center")
             entry.pack(side="left")
@@ -77,7 +76,7 @@ class ColorApp(tk.Tk):
     def on_slider(self, key):
         if self.updating:
             return
-        self.apply_change(key, int(self.scales[key].get()))
+        self.apply_change(key, int(round(float(self.scales[key].get()))))
 
     def on_entry(self, key):
         if self.updating:
@@ -89,81 +88,95 @@ class ColorApp(tk.Tk):
             return
 
         s = self.scales[key]
-        lo = int(s.cget("from"))
-        hi = int(s.cget("to"))
-        if val < lo:
-            val = lo
-        elif val > hi:
-            val = hi
+        lo = int(float(s.cget("from")))
+        hi = int(float(s.cget("to")))
+        val = max(lo, min(hi, val))
 
         self.apply_change(key, val)
 
+
+    def current(self, key):
+        vals = dict(zip("RGB", (self.r, self.g, self.b)))
+        vals.update(zip("CMYK", self.cmyk))
+        vals.update(zip("HSV", self.hsv))
+        return vals[key]
+
+    def sync_from_rgb(self):
+        c, m, y, k = rgb_to_cmyk(self.r, self.g, self.b)
+        if k >= 100:
+            c, m, y = self.cmyk[:3]
+        self.cmyk = [c, m, y, k]
+
+        h, s, v = rgb_to_hsv(self.r, self.g, self.b)
+        if s == 0 or v == 0:
+            h = self.hsv[0]
+        if v == 0:
+            s = self.hsv[1]
+        self.hsv = [h, s, v]
+
     def apply_change(self, key, value):
-        if key in ("R", "G", "B"):
+        if int(round(self.current(key))) == value:
+            self.update_all()
+            return
+
+        if key in "RGB":
             rgb = [self.r, self.g, self.b]
-            rgb["RGB".index(key)] = value
-            self.r, self.g, self.b = [int(round(x)) for x in rgb]
-            self.cmyk = list(rgb_to_cmyk(self.r, self.g, self.b))
-            self.hsv = list(rgb_to_hsv(self.r, self.g, self.b))
+            rgb["RGB".index(key)] = float(value)
+            self.r, self.g, self.b = rgb
+            self.sync_from_rgb()
 
-        elif key in ("C", "M", "Y", "K"):
+        elif key in "CMYK":
             cmyk = list(self.cmyk)
-            cmyk["CMYK".index(key)] = value
+            cmyk["CMYK".index(key)] = float(value)
+            self.r, self.g, self.b = cmyk_to_rgb(*cmyk)
+            self.sync_from_rgb()
             self.cmyk = cmyk
-            r, g, b = cmyk_to_rgb(*cmyk)
-            self.r, self.g, self.b = int(round(r)), int(round(g)), int(round(b))
-            self.hsv = list(rgb_to_hsv(self.r, self.g, self.b))
 
-        elif key in ("H", "S", "V"):
+        else:
             hsv = list(self.hsv)
-            hsv["HSV".index(key)] = value
+            hsv["HSV".index(key)] = float(value)
+            self.r, self.g, self.b = hsv_to_rgb(*hsv)
+            self.sync_from_rgb()
             self.hsv = hsv
-            r, g, b = hsv_to_rgb(*hsv)
-            self.r, self.g, self.b = int(round(r)), int(round(g)), int(round(b))
-            self.cmyk = list(rgb_to_cmyk(self.r, self.g, self.b))
 
         self.update_all()
 
     def update_all(self):
         self.updating = True
         try:
-            r, g, b = self.r, self.g, self.b
-            c, m, y, k = self.cmyk
-            h, s, v = self.hsv
-
             values = {
-                "R": r, "G": g, "B": b,
-                "C": c, "M": m, "Y": y, "K": k,
-                "H": h, "S": s, "V": v,
+                "R": self.r, "G": self.g, "B": self.b,
+                "C": self.cmyk[0], "M": self.cmyk[1],
+                "Y": self.cmyk[2], "K": self.cmyk[3],
+                "H": self.hsv[0], "S": self.hsv[1], "V": self.hsv[2],
             }
 
             for key, val in values.items():
                 new_val = int(round(val))
-
-                if int(self.scales[key].get()) != new_val:
+                if int(float(self.scales[key].get())) != new_val:
                     self.scales[key].set(new_val)
-
                 new_str = str(new_val)
                 if self.vars[key].get() != new_str:
                     self.vars[key].set(new_str)
 
-            hex_color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+            ri, gi, bi = (max(0, min(255, int(round(x))))
+                          for x in (self.r, self.g, self.b))
+            hex_color = "#{:02x}{:02x}{:02x}".format(ri, gi, bi)
             self.preview.configure(bg=hex_color)
             self.hex_label.configure(text=hex_color.upper())
         finally:
             self.updating = False
 
     def open_palette(self):
+        ri, gi, bi = (int(round(x)) for x in (self.r, self.g, self.b))
         rgb, _ = colorchooser.askcolor(
-            color="#{:02x}{:02x}{:02x}".format(int(self.r), int(self.g), int(self.b))
+            color="#{:02x}{:02x}{:02x}".format(ri, gi, bi)
         )
         if rgb:
-            self.r = int(round(rgb[0]))
-            self.g = int(round(rgb[1]))
-            self.b = int(round(rgb[2]))
-            self.cmyk = list(rgb_to_cmyk(self.r, self.g, self.b))
-            self.hsv = list(rgb_to_hsv(self.r, self.g, self.b))
+            self.r, self.g, self.b = (float(round(x)) for x in rgb)
+            self.sync_from_rgb()
             self.update_all()
 
 
-ColorApp().mainloop()
+if __name__ == "__main__":
+    ColorApp().mainloop()
