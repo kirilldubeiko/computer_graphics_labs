@@ -23,28 +23,24 @@ def step(x1, y1, x2, y2, log=None):
             _add(log, "Вырожденный отрезок (точка)")
             return [(x1, y1)]
         k = (y2 - y1) / (x2 - x1)
-        s, ak = (1 if k >= 0 else -1), abs(k)
         _add(log, "Пошаговый: ведущая ось X")
-        _add(log, f"k = Dy/Dx = {k:.4f};  y = y1 {s:+d}·round({ak:.3f}·(x−x1))")
+        _add(log, f"k = Dy/Dx = {k:.4f};  y = round(y1 + k·(x−x1))")
         pts = []
         for x in range(x1, x2 + 1):
-            r = rn(ak * (x - x1))
-            y = y1 + s * r
+            y = rn(y1 + k * (x - x1))
             pts.append((x, y))
-            _add(log, f"  x={x:5d}   y = {y1} {s:+d}·round({ak:.3f}·{x-x1:<3}) = {y}")
+            _add(log, f"  x={x:5d}   y = round({y1} + {k:.3f}·{x-x1:<3}) = {y}")
         return pts
     if y1 > y2:
         x1, x2, y1, y2 = x2, x1, y2, y1
     k = (x2 - x1) / (y2 - y1)
-    s, ak = (1 if k >= 0 else -1), abs(k)
     _add(log, "Пошаговый: ведущая ось Y")
-    _add(log, f"k = Dx/Dy = {k:.4f};  x = x1 {s:+d}·round({ak:.3f}·(y−y1))")
+    _add(log, f"k = Dx/Dy = {k:.4f};  x = round(x1 + k·(y−y1))")
     pts = []
     for y in range(y1, y2 + 1):
-        r = rn(ak * (y - y1))
-        x = x1 + s * r
+        x = rn(x1 + k * (y - y1))
         pts.append((x, y))
-        _add(log, f"  y={y:5d}   x = {x1} {s:+d}·round({ak:.3f}·{y-y1:<3}) = {x}")
+        _add(log, f"  y={y:5d}   x = round({x1} + {k:.3f}·{y-y1:<3}) = {x}")
     return pts
 
 
