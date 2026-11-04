@@ -20,52 +20,62 @@ def step(x1, y1, x2, y2, log=None):
         if x1 > x2:
             x1, x2, y1, y2 = x2, x1, y2, y1
         if x1 == x2:
-            _add(log, "Вырожденный отрезок (точка)")
+            if log is not None:
+                _add(log, "Вырожденный отрезок (точка)")
             return [(x1, y1)]
         k = (y2 - y1) / (x2 - x1)
-        _add(log, "Пошаговый: ведущая ось X")
-        _add(log, f"k = Dy/Dx = {k:.4f};  y = round(y1 + k·(x−x1))")
+        if log is not None:
+            _add(log, "Пошаговый: ведущая ось X")
+            _add(log, f"k = Dy/Dx = {k:.4f};  y = round(y1 + k·(x−x1))")
         pts = []
         for x in range(x1, x2 + 1):
             y = rn(y1 + k * (x - x1))
             pts.append((x, y))
-            _add(log, f"  x={x:5d}   y = round({y1} + {k:.3f}·{x-x1:<3}) = {y}")
+            if log is not None:
+                _add(log, f"  x={x:5d}   y = round({y1} + {k:.3f}·{x - x1:<3}) = {y}")
         return pts
     if y1 > y2:
         x1, x2, y1, y2 = x2, x1, y2, y1
     k = (x2 - x1) / (y2 - y1)
-    _add(log, "Пошаговый: ведущая ось Y")
-    _add(log, f"k = Dx/Dy = {k:.4f};  x = round(x1 + k·(y−y1))")
+    if log is not None:
+        _add(log, "Пошаговый: ведущая ось Y")
+        _add(log, f"k = Dx/Dy = {k:.4f};  x = round(x1 + k·(y−y1))")
     pts = []
     for y in range(y1, y2 + 1):
         x = rn(x1 + k * (y - y1))
         pts.append((x, y))
-        _add(log, f"  y={y:5d}   x = round({x1} + {k:.3f}·{y-y1:<3}) = {x}")
+        if log is not None:
+            _add(log, f"  y={y:5d}   x = round({x1} + {k:.3f}·{y - y1:<3}) = {x}")
     return pts
 
 
 def dda(x1, y1, x2, y2, log=None):
     dx, dy = x2 - x1, y2 - y1
     L = max(abs(dx), abs(dy))
-    _add(log, "ЦДА")
-    _add(log, f"Dx={dx}, Dy={dy}, L=max(|Dx|,|Dy|)={L}")
+    if log is not None:
+        _add(log, "ЦДА")
+        _add(log, f"Dx={dx}, Dy={dy}, L=max(|Dx|,|Dy|)={L}")
     if L == 0:
-        _add(log, "Вырожденный отрезок (точка)")
+        if log is not None:
+            _add(log, "Вырожденный отрезок (точка)")
         return [(x1, y1)]
     if (abs(dx) >= abs(dy) and dx < 0) or (abs(dx) < abs(dy) and dy < 0):
         x1, y1, x2, y2 = x2, y2, x1, y1
         dx, dy = -dx, -dy
-        _add(log, f"Концы переставлены: старт ({x1},{y1})")
+        if log is not None:
+            _add(log, f"Концы переставлены: старт ({x1},{y1})")
     sx, sy = (1 if dx >= 0 else -1), (1 if dy >= 0 else -1)
     ix, iy = abs(dx) / L, abs(dy) / L
-    _add(log, f"Приращения за шаг: Dx/L={dx/L:.4f}, Dy/L={dy/L:.4f}; точек {L+1}")
+    if log is not None:
+        _add(log, f"Приращения за шаг: Dx/L={dx / L:.4f}, Dy/L={dy / L:.4f}; точек {L + 1}")
     pts = []
     ax = ay = 0.0
     for i in range(L + 1):
         xf, yf = x1 + sx * ax, y1 + sy * ay
         x, y = rn(xf), rn(yf)
         pts.append((x, y))
-        _add(log, f"  i={i:3d}:  x={xf:8.3f}:{x:5d},  y={yf:8.3f}:{y:5d}")
+        if log is not None:
+            _add(log, f"  i={i:3d}:  x={xf:8.3f}:{x:5d},  y={yf:8.3f}:{y:5d}")
         ax += ix
         ay += iy
     return pts
@@ -80,14 +90,19 @@ def bres_line(x1, y1, x2, y2, log=None):
         x1, x2, y1, y2 = x2, x1, y2, y1
     dx, dy = x2 - x1, abs(y2 - y1)
     E, ys, y = 2 * dy - dx, (1 if y1 < y2 else -1), y1
-    _add(log, "Брезенхем (линия)")
-    if log is not None and (steep or (x1, y1, x2, y2) != ox):
-        _add(log, f"Исходный ({ox[0]},{ox[1]})–({ox[2]},{ox[3]}) : 1-й октант ({x1},{y1})–({x2},{y2})")
-        if steep:
-            _add(log, "(X и Y в формулах поменяны местами)")
-    _add(log, f"Dx={dx}, Dy={dy}, E'₀ = 2·Dy−Dx = {E}")
+
+    if log is not None:
+        _add(log, "Брезенхем (линия)")
+        if steep or (x1, y1, x2, y2) != ox:
+            _add(log, f"Исходный ({ox[0]},{ox[1]})–({ox[2]},{ox[3]}) : 1-й октант ({x1},{y1})–({x2},{y2})")
+            if steep:
+                _add(log, "(X и Y в формулах поменяны местами)")
+        _add(log, f"Dx={dx}, Dy={dy}, E'₀ = 2·Dy−Dx = {E}")
+
     pts = [(y, x1) if steep else (x1, y)]
-    _add(log, f"  шаг 0:  X={x1}, Y={y}, E'={E} : {pts[-1]}")
+    if log is not None:
+        _add(log, f"  шаг 0:  X={x1}, Y={y}, E'={E} : {pts[-1]}")
+
     for x in range(x1 + 1, x2 + 1):
         if E >= 0:
             y += ys
@@ -98,7 +113,8 @@ def bres_line(x1, y1, x2, y2, log=None):
             dec = "E'<0 : Y без изм."
         pix = (y, x) if steep else (x, y)
         pts.append(pix)
-        _add(log, f"  шаг {x-x1}:  X={x}, Y={y}, {dec}, E'={E} : {pix}")
+        if log is not None:
+            _add(log, f"  шаг {x - x1}:  X={x}, Y={y}, {dec}, E'={E} : {pix}")
     return pts
 
 
@@ -109,12 +125,14 @@ def _sym8(cx, cy, x, y):
 
 def bres_circle(cx, cy, r, log=None):
     if r < 0:
-        _add(log, f"Центр ({cx},{cy}), R={r} < 0 — некорректный радиус")
+        if log is not None:
+            _add(log, f"Центр ({cx},{cy}), R={r} < 0 — некорректный радиус")
         return []
     x, y, d = 0, r, 3 - 2 * r
-    _add(log, "Брезенхем (окружность)")
-    _add(log, f"Центр ({cx},{cy}),  R={r}")
-    _add(log, f"Старт:  X=0, Y={r}, d = 3−2R = {d}")
+    if log is not None:
+        _add(log, "Брезенхем (окружность)")
+        _add(log, f"Центр ({cx},{cy}),  R={r}")
+        _add(log, f"Старт:  X=0, Y={r}, d = 3−2R = {d}")
     pts = _sym8(cx, cy, x, y)
     i = 0
     while x < y:
@@ -128,7 +146,8 @@ def bres_circle(cx, cy, r, log=None):
         x += 1
         pts += _sym8(cx, cy, x, y)
         i += 1
-        _add(log, f"  шаг {i}:  X={x}, Y={y}, {dec}, d={d}")
+        if log is not None:
+            _add(log, f"  шаг {i}:  X={x}, Y={y}, {dec}, d={d}")
     return pts
 
 
@@ -179,23 +198,27 @@ class App:
     def _build_left(self, parent):
         seg = tk.LabelFrame(parent, text="Отрезок")
         seg.pack(fill="x", pady=(0, 4))
-        row = tk.Frame(seg); row.pack(pady=(4, 2))
+        row = tk.Frame(seg);
+        row.pack(pady=(4, 2))
         self.ex1 = self._e(row, "x₁", "0")
         self.ey1 = self._e(row, "y₁", "0")
-        row = tk.Frame(seg); row.pack(pady=(0, 4))
+        row = tk.Frame(seg);
+        row.pack(pady=(0, 4))
         self.ex2 = self._e(row, "x₂", "10")
         self.ey2 = self._e(row, "y₂", "5")
 
         cir = tk.LabelFrame(parent, text="Окружность")
         cir.pack(fill="x", pady=(0, 4))
-        row = tk.Frame(cir); row.pack(pady=4)
+        row = tk.Frame(cir);
+        row.pack(pady=4)
         self.ecx = self._e(row, "cx", "0")
         self.ecy = self._e(row, "cy", "0")
         self.er = self._e(row, "R", "5")
 
         sc = tk.LabelFrame(parent, text="Масштаб")
         sc.pack(fill="x", pady=(0, 4))
-        row = tk.Frame(sc); row.pack(pady=4)
+        row = tk.Frame(sc);
+        row.pack(pady=4)
         self.scale_var = tk.IntVar(value=self.S)
         tk.Spinbox(row, from_=1, to=100, increment=1, width=4,
                    textvariable=self.scale_var,
