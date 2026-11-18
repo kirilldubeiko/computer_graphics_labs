@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import math
 
 X_MIN, Y_MIN = 150, 150
@@ -34,46 +34,52 @@ def is_convex(polygon):
     return sign != 0
 
 
-def compute_outcode(x, y):
+def compute_outcode(x, y, x_min, x_max, y_min, y_max):
     code = 0
-    if y > Y_MAX: code |= 8
-    if y < Y_MIN: code |= 4
-    if x > X_MAX: code |= 2
-    if x < X_MIN: code |= 1
+    if y > y_max: code |= 8
+    if y < y_min: code |= 4
+    if x > x_max: code |= 2
+    if x < x_min: code |= 1
     return code
 
 
-def cohen_sutherland(x1, y1, x2, y2):
-    outcode1 = compute_outcode(x1, y1)
-    outcode2 = compute_outcode(x2, y2)
+def cohen_sutherland(x1, y1, x2, y2, x_min, x_max, y_min, y_max):
+    outcode1 = compute_outcode(x1, y1, x_min, x_max, y_min, y_max)
+    outcode2 = compute_outcode(x2, y2, x_min, x_max, y_min, y_max)
     accept = False
     if x1 == x2:
-        k = None; b = None
+        k = None
+        b = None
     else:
         k = (y2 - y1) / (x2 - x1)
         b = y1 - k * x1
     while True:
         if (outcode1 == 0) and (outcode2 == 0):
-            accept = True; break
+            accept = True
+            break
         elif (outcode1 & outcode2) != 0:
             break
         else:
             oc = outcode1 if outcode1 != 0 else outcode2
             x = y = 0
             if oc & 8:
-                y = Y_MAX; x = x1 if k is None else (y - b) / k
+                y = y_max
+                x = x1 if k is None else (y - b) / k
             elif oc & 4:
-                y = Y_MIN; x = x1 if k is None else (y - b) / k
+                y = y_min
+                x = x1 if k is None else (y - b) / k
             elif oc & 2:
-                x = X_MAX; y = y1 if k is None else k * x + b
+                x = x_max
+                y = y1 if k is None else k * x + b
             elif oc & 1:
-                x = X_MIN; y = y1 if k is None else k * x + b
+                x = x_min
+                y = y1 if k is None else k * x + b
             if oc == outcode1:
                 x1, y1 = x, y
-                outcode1 = compute_outcode(x1, y1)
+                outcode1 = compute_outcode(x1, y1, x_min, x_max, y_min, y_max)
             else:
                 x2, y2 = x, y
-                outcode2 = compute_outcode(x2, y2)
+                outcode2 = compute_outcode(x2, y2, x_min, x_max, y_min, y_max)
     return (x1, y1, x2, y2) if accept else None
 
 
@@ -129,10 +135,12 @@ def cyrus_beck(x1, y1, x2, y2, polygon):
 class ClippingApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Отсечение отрезков")
+        self.root.title("Лабораторная работа 4 - Отсечение отрезков")
 
+        self.x_min, self.y_min = X_MIN, Y_MIN
+        self.x_max, self.y_max = X_MAX, Y_MAX
         self.polygon = DEFAULT_POLYGON[:]
-        self.drawing_points = []
+        self.segments = []
 
         ctrl = tk.Frame(root)
         ctrl.pack(pady=5)
@@ -141,172 +149,140 @@ class ClippingApp:
 
         tk.Radiobutton(ctrl, text="Прямоугольник (Сазерленд-Коэн)",
                        variable=self.mode, value="rect",
-                       command=self.switch_mode).pack(side=tk.LEFT, padx=5)
+                       command=self.redraw_canvas).pack(side=tk.LEFT, padx=5)
         tk.Radiobutton(ctrl, text="Многоугольник (Кирус-Бек)",
                        variable=self.mode, value="poly",
-                       command=self.switch_mode).pack(side=tk.LEFT, padx=5)
-        tk.Radiobutton(ctrl, text="Нарисовать многоугольник",
-                       variable=self.mode, value="draw",
-                       command=self.switch_mode).pack(side=tk.LEFT, padx=5)
+                       command=self.redraw_canvas).pack(side=tk.LEFT, padx=5)
 
-        tk.Button(ctrl, text="Очистить холст",
-                  command=self.redraw_canvas).pack(side=tk.LEFT, padx=5)
-        tk.Button(ctrl, text="Сбросить многоугольник",
-                  command=self.reset_polygon).pack(side=tk.LEFT, padx=5)
+        tk.Button(ctrl, text="Загрузить из файла", bg="#d0e8ff",
+                  command=self.load_from_file).pack(side=tk.LEFT, padx=10)
+        tk.Button(ctrl, text="Очистить",
+                  command=self.clear_canvas).pack(side=tk.LEFT, padx=5)
 
         self.canvas = tk.Canvas(root, width=800, height=600, bg="white")
         self.canvas.pack()
 
-        self.canvas.bind("<Button-1>", self.on_button_press)
-        self.canvas.bind("<B1-Motion>", self.on_motion)
-        self.canvas.bind("<ButtonRelease-1>", self.on_button_release)
-        self.canvas.bind("<Button-3>", self.on_right_click)
-        self.root.bind("<Escape>", self.on_escape)
+        self.try_load_default_file()
 
-        self.start_x = None
-        self.start_y = None
-        self.temp_line = None
-        self.last_mouse = None
+    def try_load_default_file(self):
+        try:
+            with open("input.txt", "r", encoding="utf-8") as f:
+                self.parse_file_lines(f.readlines())
+        except FileNotFoundError:
+            self.redraw_canvas()
 
+    def load_from_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Выберите файл с исходными данными",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                self.parse_file_lines(f.readlines())
+            messagebox.showinfo("Успех", f"Загружено отрезков: {len(self.segments)}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось прочитать файл:\n{e}")
+
+    def parse_file_lines(self, lines):
+        clean_lines = [line.strip() for line in lines if line.strip()]
+        if not clean_lines:
+            return
+
+        n = int(clean_lines[0])
+        loaded_segments = []
+
+        idx = 1
+        for i in range(n):
+            if idx < len(clean_lines):
+                parts = list(map(float, clean_lines[idx].split()))
+                if len(parts) == 4:
+                    loaded_segments.append((parts[0], parts[1], parts[2], parts[3]))
+                idx += 1
+
+        if idx < len(clean_lines):
+            window_coords = list(map(float, clean_lines[idx].split()))
+            if len(window_coords) == 4:
+                self.x_min, self.y_min, self.x_max, self.y_max = window_coords
+            idx += 1
+
+        if idx < len(clean_lines):
+            try:
+                m = int(clean_lines[idx])
+                idx += 1
+                loaded_polygon = []
+                for i in range(m):
+                    if idx < len(clean_lines):
+                        p_parts = list(map(float, clean_lines[idx].split()))
+                        if len(p_parts) == 2:
+                            loaded_polygon.append((p_parts[0], p_parts[1]))
+                        idx += 1
+                if len(loaded_polygon) >= 3 and is_convex(loaded_polygon):
+                    self.polygon = loaded_polygon
+            except ValueError:
+                pass
+
+        self.segments = loaded_segments
         self.redraw_canvas()
 
-    def switch_mode(self):
-        if self.mode.get() == "draw":
-            self.drawing_points = []
-            self.last_mouse = None
+    def clear_canvas(self):
+        self.segments = []
         self.redraw_canvas()
 
-    def reset_polygon(self):
-        self.polygon = DEFAULT_POLYGON[:]
-        self.drawing_points = []
-        self.last_mouse = None
-        self.mode.set("poly")
-        self.redraw_canvas()
+    def draw_coordinate_system(self):
+        self.canvas.create_line(50, 550, 750, 550, arrow=tk.LAST, fill="#666666", width=1.5)
+        self.canvas.create_text(760, 550, text="X", font=("Arial", 10, "bold"), fill="#666666")
+
+        self.canvas.create_line(50, 550, 50, 50, arrow=tk.LAST, fill="#666666", width=1.5)
+        self.canvas.create_text(50, 35, text="Y", font=("Arial", 10, "bold"), fill="#666666")
+
+        for x in range(100, 751, 100):
+            self.canvas.create_line(x, 545, x, 555, fill="#666666")
+            self.canvas.create_text(x, 565, text=str(x), font=("Arial", 8), fill="#666666")
+            self.canvas.create_line(x, 50, x, 550, fill="#f0f0f0", dash=(2, 4))
+
+        for y in range(100, 551, 100):
+            val = 600 - y
+            self.canvas.create_line(45, y, 55, y, fill="#666666")
+            self.canvas.create_text(25, y, text=str(val), font=("Arial", 8), fill="#666666")
+            self.canvas.create_line(50, y, 750, y, fill="#f0f0f0", dash=(2, 4))
 
     def redraw_canvas(self):
         self.canvas.delete("all")
+
+        self.draw_coordinate_system()
+
         mode = self.mode.get()
 
         if mode == "rect":
-            self.canvas.create_rectangle(X_MIN, Y_MIN, X_MAX, Y_MAX,
+            self.canvas.create_rectangle(self.x_min, self.y_min, self.x_max, self.y_max,
                                          outline="blue", width=2, fill="#f0f8ff")
-            self.canvas.create_text(X_MIN - 10, Y_MIN, text="x_min", anchor="e")
-            self.canvas.create_text(X_MAX + 10, Y_MIN, text="x_max", anchor="w")
-            self.canvas.create_text(X_MIN, Y_MIN - 10, text="y_min", anchor="s")
-            self.canvas.create_text(X_MIN, Y_MAX + 10, text="y_max", anchor="n")
-            self.canvas.create_text(10, 10,
-                text="Зажмите ЛКМ и ведите мышь для рисования отрезка",
-                anchor="nw", fill="gray")
-
         elif mode == "poly":
             if len(self.polygon) >= 3:
                 self.canvas.create_polygon(self.polygon, outline="blue",
                                            width=2, fill="#f0f8ff")
-            self.canvas.create_text(10, 10,
-                text="Зажмите ЛКМ и ведите мышь для рисования отрезка",
-                anchor="nw", fill="gray")
 
-        elif mode == "draw":
-            if len(self.drawing_points) >= 2:
-                self.canvas.create_line(self.drawing_points + [self.drawing_points[0]],
-                                        fill="green", width=2, dash=(4, 4))
-            for (x, y) in self.drawing_points:
-                self.canvas.create_oval(x - 4, y - 4, x + 4, y + 4,
-                                        outline="green", fill="lightgreen", width=2)
-            if self.drawing_points and self.last_mouse:
-                last = self.drawing_points[-1]
-                self.canvas.create_line(last[0], last[1],
-                                        self.last_mouse[0], self.last_mouse[1],
-                                        fill="gray", dash=(2, 2))
-            self.canvas.create_text(10, 10,
-                text="ЛКМ: добавить вершину | ПКМ: завершить | Esc: отмена",
-                anchor="nw", fill="green")
-
-    def on_button_press(self, event):
-        if self.mode.get() == "draw":
-            if self.drawing_points:
-                lx, ly = self.drawing_points[-1]
-                if abs(lx - event.x) < 3 and abs(ly - event.y) < 3:
-                    return
-            self.drawing_points.append((event.x, event.y))
-            self.last_mouse = (event.x, event.y)
-            self.redraw_canvas()
+        if not self.segments:
+            self.canvas.create_text(70, 70,
+                                    text="Нажмите «Загрузить из файла» для отображения отрезков из input.txt",
+                                    anchor="nw", fill="gray", font=("Arial", 11, "bold"))
             return
 
-        self.start_x, self.start_y = event.x, event.y
+        for (x1, y1, x2, y2) in self.segments:
+            self.canvas.create_line(x1, y1, x2, y2, fill="#aaaaaa", dash=(4, 4), width=2)
 
-    def on_motion(self, event):
-        if self.mode.get() == "draw":
-            self.last_mouse = (event.x, event.y)
-            self.redraw_canvas()
-            return
+            if mode == "rect":
+                clipped = cohen_sutherland(x1, y1, x2, y2, self.x_min, self.x_max, self.y_min, self.y_max)
+            else:
+                clipped = cyrus_beck(x1, y1, x2, y2, self.polygon)
 
-        if self.start_x is None:
-            return
-        if self.temp_line:
-            self.canvas.delete(self.temp_line)
-        self.temp_line = self.canvas.create_line(
-            self.start_x, self.start_y, event.x, event.y,
-            fill="gray", dash=(4, 4), width=2)
-
-    def on_button_release(self, event):
-        if self.mode.get() == "draw":
-            return
-        if self.start_x is None:
-            return
-
-        end_x, end_y = event.x, event.y
-
-        if self.temp_line:
-            self.canvas.delete(self.temp_line)
-            self.temp_line = None
-
-        self.canvas.create_line(self.start_x, self.start_y, end_x, end_y,
-                                fill="#aaaaaa", dash=(4, 4), width=2)
-
-        if self.mode.get() == "rect":
-            clipped = cohen_sutherland(self.start_x, self.start_y, end_x, end_y)
-        else:
-            clipped = cyrus_beck(self.start_x, self.start_y, end_x, end_y, self.polygon)
-
-        if clipped:
-            cx1, cy1, cx2, cy2 = clipped
-            self.canvas.create_line(cx1, cy1, cx2, cy2, fill="red", width=3)
-            self.canvas.create_oval(cx1 - 3, cy1 - 3, cx1 + 3, cy1 + 3, fill="red")
-            self.canvas.create_oval(cx2 - 3, cy2 - 3, cx2 + 3, cy2 + 3, fill="red")
-
-        self.start_x = self.start_y = None
-
-    def on_right_click(self, event):
-        if self.mode.get() != "draw":
-            return
-
-        if len(self.drawing_points) < 3:
-            messagebox.showwarning("Мало вершин",
-                                   "Для многоугольника нужно минимум 3 вершины.")
-            return
-
-        if not is_convex(self.drawing_points):
-            messagebox.showerror("Невыпуклый многоугольник",
-                                 "Построенная фигура не является выпуклой.\n"
-                                 "Попробуйте снова.")
-            self.drawing_points = []
-            self.last_mouse = None
-            self.redraw_canvas()
-            return
-
-        self.polygon = self.drawing_points[:]
-        self.drawing_points = []
-        self.last_mouse = None
-        self.mode.set("poly")
-        self.redraw_canvas()
-
-    def on_escape(self, event):
-        if self.mode.get() == "draw":
-            self.drawing_points = []
-            self.last_mouse = None
-            self.mode.set("poly")
-            self.redraw_canvas()
+            if clipped:
+                cx1, cy1, cx2, cy2 = clipped
+                self.canvas.create_line(cx1, cy1, cx2, cy2, fill="red", width=3)
+                self.canvas.create_oval(cx1 - 3, cy1 - 3, cx1 + 3, cy1 + 3, fill="red")
+                self.canvas.create_oval(cx2 - 3, cy2 - 3, cx2 + 3, cy2 + 3, fill="red")
 
 
 if __name__ == "__main__":
